@@ -54,4 +54,4 @@ I plan to work through the course material in a consistent loop:
 
 - Official Stanford CS224N course site: [CS224N: Natural Language Processing with Deep Learning](https://web.stanford.edu/class/cs224n/)
 - Official Stanford course schedule and materials: [CS224N Course Schedule](https://web.stanford.edu/class/cs224n/index.html#schedule)
-- Chris Manning lectures: [Chris Manning Lectures and Talks](https://www.youtube.com/@ChrisManningTV)
+- Chris Manning lectures: [Chris Manning Lectures and Talks]([https://www.youtube.com/@ChrisManningTV](https://www.youtube.com/playlist?list=PLoROMvodv4rOaMFbaqxPDoLWjDaRAdP9D))
