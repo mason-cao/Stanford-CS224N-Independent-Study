@@ -21,37 +21,27 @@ This is an **independent study using publicly available course materials**. It i
 
 ## Assignment Progress
 
-This is my tracker for the current public CS224N assignment sequence.
+This is my tracker for the current public CS224N assignment sequence. I am following the official course website for the assignment order, slides, and notes, and using the public Stanford lecture playlist linked from the course page when videos are useful.
 
 | Assignment | Status |
 | --- | --- |
-| [ ] A1: Introduction to Word Vectors | Upcoming |
-| [ ] A2: Neural Network Foundations, Tensor Derivatives, and Dependency Parsing | Upcoming |
-| [ ] A3: Self-Attention and Transformers | Upcoming |
-| [ ] A4: Large Language Model Benchmarking and Evaluation | Upcoming |
+| [ ] A1: Introduction to Word Vectors | In progress |
+| [ ] A2: Word2Vec and Dependency Parsing | Not started |
+| [ ] A3: Self-Attention and Transformers | Not started |
+| [ ] A4: Large Language Model Benchmarking and Evaluation | Not started |
 
-I plan to keep updating this as I finish each assignment, revisit the lecture material, and write up the parts that are mathematically interesting or practically non-obvious. Since CS224N assignments change across offerings, this tracker follows the current public course website rather than older archived versions.
+I will keep updating this as I finish each assignment, revisit the lecture material, and write up the parts that are mathematically interesting or practically non-obvious.
+
+Since CS224N assignments change across offerings, this tracker follows the current public course website rather than older archived versions.
 
 ## Technical Focus
 
-One of the main arcs of this study is the transition from **Recurrent Neural Networks (RNNs)** to **self-attention** and the **Transformer architecture**.
+Right now I am starting with word vectors, because that feels like the right place to build real intuition before jumping into bigger models. I want to understand what it actually means for words to live in a vector space: what the training objective is doing, why similar contexts lead to similar representations, and where the geometry is useful versus where it is just a nice visualization.
 
-I want this repository to make that transition explicit. RNNs are important because they frame sequence modeling in a way that exposes both the strengths and the limitations of recurrence: hidden-state compression, vanishing gradients, sequential computation, and difficulty with long-range dependencies. Transformers matter because self-attention changes that formulation. Instead of forcing information through a single evolving state, tokens interact directly through learned query, key, and value projections, which changes both the optimization landscape and the computational profile of the model.
-
-That shift is a major reason I am studying CS224N in the first place. I want to understand the architecture mathematically, not just use it. That means paying close attention to word representation geometry, matrix calculus, backpropagation, attention as differentiable memory access, and the internals of Transformer blocks, pretraining objectives, and adaptation methods.
-
-## Study Workflow
-
-I plan to work through the course material in a consistent loop:
-
-1. Read lecture slides, notes, and primary papers.
-2. Re-derive the main equations and implementation details.
-3. Implement the relevant models or assignment components.
-4. Validate behavior empirically and inspect failure modes.
-5. Record concise notes on intuition, design tradeoffs, and lessons learned.
+Later in the course, I am especially interested in the path from RNNs to Transformers. But I do not want to rush there. For now, the goal is to get the basics of representation learning solid enough that the later models feel like extensions of ideas I already understand, not a pile of architecture diagrams.
 
 ## Credits
 
 - Official Stanford CS224N course site: [CS224N: Natural Language Processing with Deep Learning](https://web.stanford.edu/class/cs224n/)
-- Official Stanford course schedule and materials: [CS224N Course Schedule](https://web.stanford.edu/class/cs224n/index.html#schedule)
-- Chris Manning lectures: [Chris Manning Lectures and Talks](https://www.youtube.com/playlist?list=PLoROMvodv4rOaMFbaqxPDoLWjDaRAdP9D)
+- Official Stanford course schedule and materials: [CS224N Course Schedule](https://web.stanford.edu/class/cs224n/#schedule)
+- Official public CS224N lecture videos linked by the course site: [Stanford CS224N YouTube playlist](https://www.youtube.com/playlist?list=PLoROMvodv4rOaMFbaqxPDoLWjDaRAdP9D)
