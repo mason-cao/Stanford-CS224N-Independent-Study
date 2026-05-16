@@ -7,9 +7,16 @@
 
 ## Repo Status
 
-Not started.
+Pre-reading started.
 
-I have not started the A2 materials or implementation work yet.
+I have started the Week 2 neural network and backpropagation notes before pulling starter code or implementing anything.
+
+## Current Study Focus
+
+- Review softmax and cross-entropy until the `yhat - y` gradient is automatic.
+- Track vector and matrix shapes carefully, especially the column-vector convention in the A2 handout.
+- Connect Word2Vec derivatives to the same backpropagation rules used in ordinary neural classifiers.
+- Understand dropout and Adam conceptually before using them in the parser implementation.
 
 ## Intended Local Structure
 

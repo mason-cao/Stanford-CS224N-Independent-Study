@@ -24,3 +24,8 @@ These are the official materials I am using while working through the course.
 - I have not mirrored Stanford starter-code archives into this repo.
 - A1 is listed on the course schedule as a code release. I am documenting the notebook structure without mirroring the starter archive into this repo.
 - The public lecture-video playlist is the video resource linked from the course page for non-enrolled learners.
+
+## Lecture Materials Used In Notes
+
+- Week 2 neural networks slides: <https://web.stanford.edu/class/cs224n/slides_w26/cs224n-2026-lecture03-neuralnets.pdf>
+- Week 2 neural networks notes: <https://web.stanford.edu/class/cs224n/readings/cs224n-2019-notes03-neuralnets.pdf>
