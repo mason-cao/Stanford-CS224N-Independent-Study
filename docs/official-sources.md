@@ -14,6 +14,7 @@ These are the official materials I am using while working through the course.
 
 ## Assignment Handouts
 
+- A1 code release: <https://web.stanford.edu/class/cs224n/assignments_w26/a1.zip>
 - A2 handout: <https://web.stanford.edu/class/cs224n/assignments_w26/a2.pdf>
 - A3 handout: <https://web.stanford.edu/class/cs224n/assignments_w26/a3.pdf>
 - A4 handout: <https://web.stanford.edu/class/cs224n/assignments_w26/a4.pdf>
@@ -21,5 +22,5 @@ These are the official materials I am using while working through the course.
 ## Notes
 
 - I have not mirrored Stanford starter-code archives into this repo.
-- A1 is listed on the course schedule as a code release. I will add the assignment materials locally when I am ready to work through it.
+- A1 is listed on the course schedule as a code release. I am documenting the notebook structure without mirroring the starter archive into this repo.
 - The public lecture-video playlist is the video resource linked from the course page for non-enrolled learners.
