@@ -5,10 +5,11 @@
 - Course week: Week 1
 - Course schedule: <https://web.stanford.edu/class/cs224n/#schedule>
 - Official A1 code release: <https://web.stanford.edu/class/cs224n/assignments_w26/a1.zip>
+- Public notebook preview: <https://web.stanford.edu/class/cs224n/assignments/a1_preview/exploring_word_vectors.html>
 
 ## Repo Status
 
-In progress.
+In progress. Part 1 count-based vector implementation notes are complete; Part 2 GloVe analysis is next.
 
 I am working through the word-vector material and keeping notes before doing any larger implementation work.
 
@@ -118,6 +119,95 @@ y = row[1]
 ```
 
 The plot should show only the requested words, not the whole vocabulary. Label placement matters because the written analysis depends on visually comparing a small set of points.
+
+## Part 1 Finished Notes: Count-Based Vectors
+
+This is the part of A1 where the representation is completely transparent. There is no trained neural model yet. Every coordinate starts as a count of how often one word appears near another word. That makes Part 1 a useful baseline because I can inspect every modeling choice directly.
+
+### Implementation I Want To Remember
+
+The implementation has three important invariants:
+
+- the vocabulary order comes from `sorted(set(flattened_tokens))`
+- the same `word2ind` mapping is used for both rows and columns
+- context windows are clipped at document boundaries instead of padded
+
+The core loop for the co-occurrence matrix is:
+
+```python
+for document in corpus:
+    for center_index, center_word in enumerate(document):
+        left = max(0, center_index - window_size)
+        right = min(len(document), center_index + window_size + 1)
+
+        for context_index in range(left, right):
+            if context_index == center_index:
+                continue
+            context_word = document[context_index]
+            M[word2ind[center_word], word2ind[context_word]] += 1
+```
+
+The matrix is symmetric if the window is symmetric and every token gets its own turn as the center word. I should not enforce symmetry manually with `M = M + M.T`, because that can double counts if the loop already visits both directions. The right test is whether the counting procedure creates the expected entries from the toy corpus.
+
+For SVD, the assignment wants a reduced matrix with shape:
+
+```text
+number_of_words x k
+```
+
+`TruncatedSVD(n_components=k).fit_transform(M)` gives one row per word in the original row order. That is exactly what `plot_embeddings` needs. The returned coordinates include singular-value scaling, so nearby points in the plot are not pure rows of `U`; they are the projected count vectors in the reduced space.
+
+### Toy-Corpus Sanity Check
+
+The toy corpus is not just a throwaway test. It catches three common mistakes:
+
+1. If I lowercase or strip punctuation inside `distinct_words`, then `All` and `All's` will not match the expected vocabulary.
+2. If I forget to sort the vocabulary, the matrix counts can be right but assigned to the wrong row labels.
+3. If I use the wrong window endpoints, edge words like `<START>` and `<END>` will have incorrect counts.
+
+For a window size of 1, the pair `<START>, All` appears in both toy documents. The matrix entry:
+
+```text
+M[word2ind["<START>"], word2ind["All"]]
+```
+
+should therefore be 2. The reverse entry should also be 2 because each `All` later becomes the center word and sees `<START>` in its own window. This is the simplest way to check that I understand why the matrix is symmetric.
+
+### What The 2D SVD Plot Can And Cannot Show
+
+The 2D plot is a compressed diagnostic, not the actual high-dimensional representation. If two words are close in the plot, the safest interpretation is:
+
+```text
+after reducing this particular co-occurrence matrix to two dimensions,
+these words have similar projected count patterns
+```
+
+That is weaker than saying the words are synonyms. A word can land near another word because they share sentiment-review contexts, topic contexts, syntactic contexts, or projection artifacts.
+
+For the A1 word list, I expect at least these pressures:
+
+- `movie`, `book`, and `story` can cluster because reviews often discuss narrative objects and media.
+- `good`, `interesting`, and `fascinating` can cluster because they work as evaluative adjectives.
+- `large`, `massive`, and `huge` might not cluster cleanly even though they are semantically related, because the small movie-review sample may use them in different contexts or too rarely.
+- `mysterious` may behave more like a genre or tone word than a generic adjective, so its neighbors depend heavily on corpus domain.
+
+The lesson is that count-based embeddings expose domain effects quickly. If the corpus is movie reviews, the representation is about how words behave in movie reviews, not how they behave in all of English.
+
+### Part 1 Postmortem
+
+What feels solid now:
+
+- I can explain why row and column order have to be deterministic.
+- I can derive the window boundaries without special-casing document edges.
+- I understand why the co-occurrence matrix becomes symmetric under this setup.
+- I know why row-normalizing the 2D output changes the plot toward directional comparison.
+
+What I still need from Part 2:
+
+- compare this small count-based geometry against pretrained GloVe vectors
+- find examples where cosine similarity reflects usage rather than synonymy
+- explain why static embeddings struggle with polysemy
+- connect the bias questions back to distributional training data instead of treating them as a separate topic
 
 ## Part 1 Analysis Notes
 

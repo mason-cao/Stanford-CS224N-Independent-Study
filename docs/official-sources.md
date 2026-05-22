@@ -15,6 +15,7 @@ These are the official materials I am using while working through the course.
 ## Assignment Handouts
 
 - A1 code release: <https://web.stanford.edu/class/cs224n/assignments_w26/a1.zip>
+- A1 public notebook preview: <https://web.stanford.edu/class/cs224n/assignments/a1_preview/exploring_word_vectors.html>
 - A2 handout: <https://web.stanford.edu/class/cs224n/assignments_w26/a2.pdf>
 - A2 code release: <https://web.stanford.edu/class/cs224n/assignments_w26/a2.zip>
 - A3 handout: <https://web.stanford.edu/class/cs224n/assignments_w26/a3.pdf>
