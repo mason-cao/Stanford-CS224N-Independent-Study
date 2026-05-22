@@ -155,6 +155,215 @@ sigma'(x) = sigma(x) * (1 - sigma(x))
 
 That form is useful in backprop because the forward pass already computed `sigma(x)`.
 
+## Part 1 Worked Derivation Notes
+
+I want the Word2Vec part to feel like ordinary backpropagation, not like a bag of memorized formulas. The computational graph for one center/outside pair is:
+
+```text
+v_c -> z = U^T v_c -> yhat = softmax(z) -> J = -sum_w y_w log(yhat_w)
+```
+
+where:
+
+```text
+v_c in R^d
+U in R^{d x |V|}
+z in R^{|V|}
+yhat in R^{|V|}
+y in R^{|V|}
+```
+
+The handout's shape convention is the anchor: every gradient must have the same shape as the variable it differentiates.
+
+### Cross-Entropy Collapse
+
+Since `y` is one-hot for this single example, only the true outside word `o` contributes:
+
+```text
+-sum_w y_w log(yhat_w)
+= -(1 * log(yhat_o) + sum_{w != o} 0 * log(yhat_w))
+= -log(yhat_o)
+```
+
+This is why the naive-softmax Word2Vec loss is just the negative log probability assigned to the observed outside word.
+
+### Softmax Plus Cross-Entropy Error Signal
+
+For logits `z`, softmax gives:
+
+```text
+yhat_i = exp(z_i) / sum_j exp(z_j)
+```
+
+The derivative of the loss with respect to each logit has the standard form:
+
+```text
+dJ/dz_i = yhat_i - y_i
+```
+
+I can remember this as "predicted probability minus target probability." It also passes the sign test:
+
+- for the true outside word, `y_i = 1`, so `yhat_i - y_i` is negative unless the model already assigns probability 1
+- for wrong outside words, `y_i = 0`, so the gradient is positive in proportion to the probability the model assigned
+
+Gradient descent subtracts this signal, so it increases the true logit and decreases overpredicted wrong logits.
+
+### Center-Vector Gradient
+
+The score equation is:
+
+```text
+z = U^T v_c
+```
+
+The upstream gradient is:
+
+```text
+dJ/dz = yhat - y
+```
+
+Since `U^T` maps `R^d` to `R^{|V|}`, the backward pass maps the error signal back through `U`:
+
+```text
+dJ/dv_c = U (yhat - y)
+```
+
+Shape check:
+
+```text
+U shape: d x |V|
+yhat - y shape: |V|
+result shape: d
+```
+
+Expanding the expression helps with intuition:
+
+```text
+U yhat - U y
+```
+
+The first term is the model's expected outside vector under its current distribution. The second term is the true outside vector, because multiplying `U` by one-hot `y` selects column `u_o`. So the gradient is:
+
+```text
+expected outside vector - observed outside vector
+```
+
+Subtracting the gradient moves `v_c` toward the observed outside vector and away from the expectation the model currently has wrong.
+
+### When The Center Gradient Is Zero
+
+The center-vector gradient is zero when:
+
+```text
+U (yhat - y) = 0
+```
+
+The strongest intuitive case is `yhat = y`, but that is not the only mathematical possibility if `yhat - y` lies in the null space of `U`. For the assignment answer, the compact equation above is the shape-correct condition.
+
+### Outside-Vector Gradient
+
+Each score is:
+
+```text
+z_w = u_w^T v_c
+```
+
+So each outside vector gets:
+
+```text
+dJ/du_w = (yhat_w - y_w) v_c
+```
+
+There are two cases:
+
+```text
+w = o:     dJ/du_w = (yhat_o - 1) v_c
+w != o:   dJ/du_w = yhat_w v_c
+```
+
+The sign matters. For the true outside word, `yhat_o - 1` is negative, so subtracting the gradient adds a positive multiple of `v_c` to `u_o`. For a wrong outside word, `yhat_w` is positive, so subtracting the gradient moves `u_w` away from `v_c`.
+
+The full matrix gradient with respect to `U` is the columns of those vector gradients:
+
+```text
+dJ/dU = [dJ/du_1, dJ/du_2, ..., dJ/du_|V|]
+```
+
+Equivalently:
+
+```text
+dJ/dU = v_c (yhat - y)^T
+```
+
+Shape check:
+
+```text
+v_c shape: d x 1
+(yhat - y)^T shape: 1 x |V|
+result shape: d x |V|
+```
+
+That matches `U`.
+
+### L2 Normalization Answer Shape
+
+If:
+
+```text
+u_x = alpha u_y
+```
+
+with `alpha > 0`, then:
+
+```text
+u_x / ||u_x|| = u_y / ||u_y||
+```
+
+So normalization collapses the two vectors onto the same direction. That is fine if the downstream task should treat them as equivalent except for scale. It loses useful information if the magnitude difference matters for classification.
+
+In the handout's phrase-classification setup, if two words point in the same direction but have different strengths of positive or negative sentiment, raw magnitude could affect the sign or confidence of the summed phrase vector. Normalization would erase that intensity difference.
+
+### Activation Derivative Answers
+
+For leaky ReLU:
+
+```text
+f(x) = max(alpha x, x)
+```
+
+with `0 < alpha < 1`, the derivative is:
+
+```text
+x > 0: 1
+x < 0: alpha
+```
+
+At `x = 0`, the derivative is not defined in the ordinary sense, and the handout says to ignore that case.
+
+For sigmoid:
+
+```text
+sigma(x) = 1 / (1 + exp(-x))
+```
+
+The derivative is:
+
+```text
+sigma'(x) = sigma(x) (1 - sigma(x))
+```
+
+This form is the one to remember for backprop because the forward pass already computed `sigma(x)`.
+
+### Part 1 Postmortem
+
+The main thing I learned is that most of A2 Part 1 is one error signal reused through different variables:
+
+```text
+yhat - y
+```
+
+The rest is shape discipline. If I know whether vectors are columns or rows, I can usually recover the transpose rather than guessing. The center-vector update, outside-vector update, and parser classifier derivative later in the assignment are all the same softmax-cross-entropy pattern.
+
 ## Part 2: Adam Notes
 
 Plain stochastic gradient descent updates parameters directly in the direction of the current minibatch gradient:
