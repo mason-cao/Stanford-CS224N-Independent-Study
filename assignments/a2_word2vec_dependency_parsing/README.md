@@ -10,7 +10,7 @@
 
 In progress.
 
-I have finished the first pass through the Word2Vec derivative, optimization, dropout, and transition-mechanics questions. Parser model and training-loop notes are next.
+I have finished the first pass through the Word2Vec derivative, optimization, dropout, transition-mechanics, parser model, and training-loop questions. Final evaluation and wrap-up notes are next.
 
 The assignment-specific notes are in [notes.md](notes.md).
 
@@ -21,7 +21,7 @@ The assignment-specific notes are in [notes.md](notes.md).
 - Connect Word2Vec derivatives to the same backpropagation rules used in ordinary neural classifiers.
 - Understand dropout and Adam conceptually before using them in the parser implementation.
 - Keep parser implementation notes tied to the exact starter-code responsibilities instead of treating the parser as a black box.
-- Finish parser model shape notes, training workflow notes, and final A2 wrap-up before marking A2 complete.
+- Finish final A2 evaluation and wrap-up notes before marking A2 complete.
 
 ## Intended Local Structure
 

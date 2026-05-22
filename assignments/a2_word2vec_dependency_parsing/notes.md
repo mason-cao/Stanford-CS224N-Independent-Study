@@ -717,6 +717,195 @@ flattened x shape: batch_size x (n_features * embed_size)
 
 The implementation should use tensor indexing or gather-style operations, not `nn.Embedding`, because the assignment is testing the lookup operation directly.
 
+## Parser Model Worked Notes
+
+The parser model is a feedforward classifier over parser states. The parser state itself is symbolic, but `utils/parser_utils.py` turns it into a fixed-length list of token indices. The model's job is to map those indices to one of three transition classes:
+
+```text
+SHIFT, LEFT-ARC, RIGHT-ARC
+```
+
+The assignment writes the model as:
+
+```text
+x = [E_{w_1}, ..., E_{w_m}]
+h = ReLU(x W + b1)
+l = h U + b2
+yhat = softmax(l)
+```
+
+In implementation, the model should return `l`, the logits, not `yhat`. PyTorch's `CrossEntropyLoss` expects raw logits and applies log-softmax internally.
+
+### Parameter Shapes
+
+The starter defaults give:
+
+```text
+n_features = 36
+hidden_size = 200
+n_classes = 3
+```
+
+If:
+
+```text
+embed_size = d
+batch_size = B
+```
+
+then:
+
+```text
+self.pretrained_embeddings shape: vocab_size x d
+self.embed_to_hidden_weight shape: (36d) x 200
+self.embed_to_hidden_bias shape: 200
+self.hidden_to_logits_weight shape: 200 x 3
+self.hidden_to_logits_bias shape: 3
+```
+
+The forward-pass shapes should be:
+
+```text
+w: B x 36
+embedding_lookup(w): B x (36d)
+h: B x 200
+logits: B x 3
+```
+
+The easiest way to catch mistakes is to write the shape next to every matrix multiplication:
+
+```text
+(B x 36d) @ (36d x 200) + (200) -> B x 200
+(B x 200) @ (200 x 3) + (3) -> B x 3
+```
+
+The bias vectors broadcast across the batch dimension.
+
+### Manual Linear Layers
+
+The handout explicitly says not to use `torch.nn.Linear` or `torch.nn.Embedding`. That means the layer operations should be written directly with parameters:
+
+```python
+x = self.embedding_lookup(w)
+h = torch.relu(x @ self.embed_to_hidden_weight + self.embed_to_hidden_bias)
+h = self.dropout(h)
+logits = h @ self.hidden_to_logits_weight + self.hidden_to_logits_bias
+return logits
+```
+
+The exact attribute names should match the starter TODOs, because the grader may inspect them. The point is not to avoid matrix multiplication; the point is to show that I know what a linear layer and an embedding lookup are doing.
+
+### Efficient Embedding Lookup
+
+The input `w` is a matrix of integer token ids:
+
+```text
+w shape: B x 36
+```
+
+The embedding matrix is:
+
+```text
+self.pretrained_embeddings shape: vocab_size x d
+```
+
+Indexing the embedding matrix by `w` should produce:
+
+```text
+self.pretrained_embeddings[w] shape: B x 36 x d
+```
+
+Then flatten the last two dimensions:
+
+```text
+B x 36 x d -> B x (36d)
+```
+
+A direct implementation pattern is:
+
+```python
+embeddings = self.pretrained_embeddings[w]
+x = embeddings.view(w.shape[0], -1)
+```
+
+or, if contiguity becomes an issue:
+
+```python
+x = embeddings.reshape(w.shape[0], -1)
+```
+
+The important thing is that this avoids Python loops over examples or features. A nested loop would be easier to read but much slower and could fail grading time limits.
+
+### ReLU Derivative For The Written Question
+
+The parser written section asks for:
+
+```text
+h = ReLU(xW + b1)
+```
+
+Let:
+
+```text
+a = xW + b1
+h_i = ReLU(a_i)
+a_i = sum_k x_k W_{k,i} + b1_i
+```
+
+For one input coordinate `x_j` and one hidden unit `h_i`:
+
+```text
+dh_i/dx_j = 1[a_i > 0] * W_{j,i}
+```
+
+If the pre-activation `a_i` is positive, ReLU passes the local derivative through. If `a_i` is negative, the derivative is zero. The assignment says to ignore the undefined case at exactly zero.
+
+### Softmax Classifier Derivative
+
+The parser classifier has three logits:
+
+```text
+l in R^3
+yhat = softmax(l)
+J = CE(y, yhat)
+```
+
+For class index `i`:
+
+```text
+dJ/dl_i = yhat_i - y_i
+```
+
+If the true class is `c`, then:
+
+```text
+i = c:    dJ/dl_i = yhat_i - 1
+i != c:  dJ/dl_i = yhat_i
+```
+
+This is the same result as the Word2Vec derivative. The only difference is that the parser has three transition classes instead of `|V|` possible outside words.
+
+### Why The Model Is Small But Easy To Break
+
+The architecture is simple, but several mistakes can produce plausible-looking code:
+
+- returning probabilities instead of logits
+- flattening embeddings in the wrong order
+- using `nn.Embedding` or `nn.Linear` despite the assignment restriction
+- accidentally detaching pretrained embeddings from the computation graph if they are supposed to train
+- applying dropout during evaluation
+- creating parameters as plain tensors instead of registered `nn.Parameter`s
+
+The safest implementation order is:
+
+1. parameter shapes
+2. embedding lookup sanity check
+3. forward sanity check
+4. debug-mode training
+5. full training
+
+That order isolates shape bugs before optimizer behavior enters the picture.
+
 ## Training Loop Plan
 
 Training loop for each minibatch:
@@ -762,13 +951,155 @@ When something fails, first check shapes:
 - Did I accidentally apply softmax before the loss?
 - Is dropout only active in training mode?
 
+## Training Workflow Worked Notes
+
+The parser training code has two separate responsibilities:
+
+- `train_for_epoch`: run minibatches and update parameters
+- `train`: manage epochs, evaluation, and reporting
+
+The basic minibatch loop should be:
+
+```python
+model.train()
+
+for train_x, train_y in minibatches:
+    optimizer.zero_grad()
+    logits = model(train_x)
+    loss = loss_func(logits, train_y)
+    loss.backward()
+    optimizer.step()
+```
+
+The ordering matters. `optimizer.zero_grad()` must happen before `backward()` so gradients from previous minibatches do not accumulate. `optimizer.step()` must happen after `backward()` because the optimizer needs current gradients.
+
+### Targets For CrossEntropyLoss
+
+`CrossEntropyLoss` expects:
+
+```text
+logits shape: B x 3
+targets shape: B
+```
+
+The target tensor should contain class indices, not one-hot vectors. If `train_y` is one-hot, the loss call is wrong for this assignment setup. If logits are already softmaxed, the loss call is also wrong because `CrossEntropyLoss` applies the log-softmax internally.
+
+The correct mental model:
+
+```text
+model output: raw class scores
+loss function: log-softmax + negative log likelihood
+target: integer class id
+```
+
+### Train Mode And Eval Mode
+
+The mode switch controls dropout:
+
+```python
+model.train()
+```
+
+enables dropout during training.
+
+```python
+model.eval()
+```
+
+disables dropout during evaluation.
+
+When evaluating dev or test UAS, gradients are not needed:
+
+```python
+model.eval()
+with torch.no_grad():
+    dev_UAS = parser.parse(dev_data, model)
+```
+
+The exact utility call depends on the starter code, but the principle is stable: evaluation should be deterministic and should not build a gradient graph.
+
+### Debug Mode Before Full Training
+
+The handout gives a debug mode:
+
+```bash
+python run.py -d
+```
+
+The expected rough target is:
+
+```text
+loss < 0.2
+dev UAS > 65
+```
+
+This does not prove the full parser is correct, but it catches major implementation mistakes quickly. If debug mode cannot learn the small subset, full training is wasted time.
+
+After debug mode is stable, full training is:
+
+```bash
+python run.py
+```
+
+The rough full-training target is:
+
+```text
+train loss < 0.08
+dev UAS > 87
+```
+
+The model from the original neural dependency parsing paper is around 92.5 UAS, so the assignment target is lower than the paper result but high enough to catch broken implementations.
+
+### What UAS Measures
+
+UAS means Unlabeled Attachment Score. It is:
+
+```text
+number of predicted dependencies with the correct head
+/
+number of total dependencies
+```
+
+"Unlabeled" means the dependency relation type is ignored. If the parser attaches `conference` to the correct head but gives the wrong relation label, UAS still counts the head as correct. This assignment's model predicts transitions, not dependency labels, so UAS is the appropriate metric.
+
+### Debugging Order
+
+When the parser fails, I should avoid jumping straight to optimizer tuning. The failure order should be:
+
+1. Transition mechanics: `parser_transitions.py part_c`
+2. Minibatch parsing: `parser_transitions.py part_d`
+3. Embedding lookup: `parser_model.py -e`
+4. Forward pass: `parser_model.py -f`
+5. Debug training: `run.py -d`
+6. Full training: `run.py`
+
+Common symptom mapping:
+
+| Symptom | Likely source |
+| --- | --- |
+| parse never terminates | completed-parse filtering or illegal transition handling |
+| dependency heads reversed | `LEFT-ARC` / `RIGHT-ARC` implementation swapped |
+| shape error in first linear layer | embedding lookup flattening or `input_size` |
+| loss does not decrease in debug mode | logits/loss mismatch, no optimizer step, dropout mode issue |
+| dev UAS changes between repeated evals | dropout still active during evaluation |
+| grading timeout | slow embedding lookup or inefficient minibatch parsing |
+
+### Checkpoint 6 Postmortem
+
+The parser is conceptually small:
+
+```text
+parser state -> token ids -> embeddings -> hidden layer -> transition logits
+```
+
+Most of the difficulty is not model depth. It is respecting contracts between files: feature extraction returns token ids, the model returns logits, the loss expects class indices, and minibatch parsing expects completed parses to be filtered without losing original order.
+
 ## Remaining Questions To Close Out
 
-- How the parser model dimensions line up from embedding lookup through logits.
-- How to implement embedding lookup efficiently without `nn.Embedding`.
-- How the training loop should switch between `model.train()` and `model.eval()`.
 - How to interpret UAS and parser errors after training.
+- How to summarize the full A2 path from Word2Vec derivatives to parser training.
+- How to mark A2 complete without pretending I mirrored the starter archive into this repo.
 
 ## Current Status
 
-I have worked through the Word2Vec derivatives, Adam, dropout, and the transition-system mechanics. The remaining A2 work is to write detailed notes for the parser model, training loop, debugging workflow, and final evaluation/postmortem.
+I have worked through the Word2Vec derivatives, Adam, dropout, transition-system mechanics, parser model, embedding lookup, training loop, and debugging workflow. The remaining A2 work is the final evaluation/postmortem and repository status update.
