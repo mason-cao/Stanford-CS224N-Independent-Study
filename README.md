@@ -26,7 +26,7 @@ This is my tracker for the current public CS224N assignment sequence. I am follo
 | Assignment | Status |
 | --- | --- |
 | [x] A1: Introduction to Word Vectors | Complete |
-| [ ] A2: Word2Vec and Dependency Parsing | In progress |
+| [x] A2: Word2Vec and Dependency Parsing | Complete |
 | [ ] A3: Self-Attention and Transformers | Not started |
 | [ ] A4: Large Language Model Benchmarking and Evaluation | Not started |
 

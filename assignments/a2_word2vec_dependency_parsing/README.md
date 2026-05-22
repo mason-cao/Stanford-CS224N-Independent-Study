@@ -8,20 +8,19 @@
 
 ## Repo Status
 
-In progress.
+Complete as a study-notes milestone.
 
-I have finished the first pass through the Word2Vec derivative, optimization, dropout, transition-mechanics, parser model, and training-loop questions. Final evaluation and wrap-up notes are next.
+I have finished the first pass through the Word2Vec derivative, optimization, dropout, transition-mechanics, parser model, training-loop, evaluation, and wrap-up questions.
 
 The assignment-specific notes are in [notes.md](notes.md).
 
 ## Current Study Focus
 
-- Review softmax and cross-entropy until the `yhat - y` gradient is automatic.
-- Track vector and matrix shapes carefully, especially the column-vector convention in the A2 handout.
-- Connect Word2Vec derivatives to the same backpropagation rules used in ordinary neural classifiers.
-- Understand dropout and Adam conceptually before using them in the parser implementation.
-- Keep parser implementation notes tied to the exact starter-code responsibilities instead of treating the parser as a black box.
-- Finish final A2 evaluation and wrap-up notes before marking A2 complete.
+- Keep the `yhat - y` gradient automatic for both Word2Vec and parser transition classification.
+- Track vector and matrix shapes carefully, especially across embedding lookup and flattened parser features.
+- Connect optimizer and regularization choices to actual training behavior.
+- Treat parser transitions as state mutations that need exact stack and buffer discipline.
+- Read UAS as a head-attachment metric and use parser errors to debug model behavior.
 
 ## Intended Local Structure
 

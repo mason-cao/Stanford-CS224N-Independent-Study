@@ -1094,12 +1094,111 @@ parser state -> token ids -> embeddings -> hidden layer -> transition logits
 
 Most of the difficulty is not model depth. It is respecting contracts between files: feature extraction returns token ids, the model returns logits, the loss expects class indices, and minibatch parsing expects completed parses to be filtered without losing original order.
 
-## Remaining Questions To Close Out
+## Final A2 Evaluation Notes
 
-- How to interpret UAS and parser errors after training.
-- How to summarize the full A2 path from Word2Vec derivatives to parser training.
-- How to mark A2 complete without pretending I mirrored the starter archive into this repo.
+The final parser result should be read through UAS and error analysis, not just through whether the training script runs.
+
+The handout's rough targets are:
+
+```text
+debug mode: loss < 0.2 and dev UAS > 65
+full mode:  train loss < 0.08 and dev UAS > 87
+```
+
+These are sanity targets. They tell me the implementation is probably wired correctly, but they do not prove the parser understands all syntax. A transition-based parser can do well on common local patterns and still make systematic mistakes on long attachments, coordination, prepositional phrase attachment, or unusual sentence structure.
+
+### Reading Parser Errors
+
+When a parse is wrong, I should ask which piece of the system made the mistake:
+
+| Error pattern | What I should inspect |
+| --- | --- |
+| wrong head for a nearby dependent | local feature representation or transition classifier |
+| prepositional phrase attached too high or too low | parser's limited lookahead and ambiguity in stack/buffer state |
+| coordination handled badly | feature templates may not capture enough structure for parallel phrases |
+| ROOT attached to the wrong word | final transition decisions or learned preference for sentence heads |
+| many impossible parses | transition legality, minibatch filtering, or stack mutation bug |
+
+The model predicts transitions greedily. That means an early bad transition changes the future parser state. Later predictions can be locally reasonable given a bad state but still produce a globally wrong tree. This is different from a graph-based parser that scores complete dependency structures more directly.
+
+### What The Reported Scores Mean
+
+If the model reaches the target dev UAS, I should report both dev and test UAS in the written submission. The dev score is useful while debugging and tuning. The test score is the final held-out estimate.
+
+I should not overstate small differences. A dev UAS of 88 versus 89 is less important than knowing whether the implementation is correct, whether dropout is disabled during evaluation, and whether the same run is reasonably reproducible. The handout already says there is some randomness in training.
+
+### What I Would Save In A Debug Log
+
+If I were running the starter code locally, these are the notes worth saving after each run:
+
+```text
+command:
+debug/full:
+train loss:
+dev UAS:
+test UAS:
+seed if controlled:
+code changes since last run:
+failure symptoms:
+next hypothesis:
+```
+
+This prevents random optimizer behavior from turning into vague memory. It also makes it easier to tell whether a change improved the parser or just changed the run.
+
+## Final A2 Postmortem
+
+A2 connects three levels of the course:
+
+1. Word2Vec derivatives show the mechanics of softmax, cross-entropy, and vector updates.
+2. Adam and dropout show general training tools for neural networks.
+3. The dependency parser applies those tools to a structured NLP problem.
+
+The main mathematical pattern is the softmax-cross-entropy gradient:
+
+```text
+prediction - target
+```
+
+It appears first as:
+
+```text
+yhat - y
+```
+
+for Word2Vec outside-word prediction. It appears again as:
+
+```text
+yhat_i - y_i
+```
+
+for parser transition classification. The vocabulary-sized classifier and the three-class parser classifier are the same idea at different output sizes.
+
+The main implementation lesson is that shape contracts matter more than the apparent complexity of the model. The parser is not deep, but it has several strict interfaces:
+
+- `PartialParse` must maintain stack, buffer, and dependency state correctly.
+- `minibatch_parse` must preserve original sentence order while filtering completed parses.
+- feature extraction produces fixed-length token-id lists.
+- embedding lookup turns those ids into one flat vector per example.
+- the model returns logits, not probabilities.
+- `CrossEntropyLoss` receives class indices, not one-hot labels.
+- evaluation disables dropout.
+
+If any one of those contracts is violated, the code can still run while training the wrong thing.
+
+## What I Am Counting As Complete
+
+For this repository, A2 is complete as a study-notes milestone. I have not mirrored Stanford's starter archive or committed assignment solution code here. The completed work is the path I wanted for this independent study:
+
+- derive the Word2Vec gradients carefully
+- understand Adam and dropout before using them
+- work through parser transitions by hand
+- map the parser starter files to their responsibilities
+- document tensor shapes from embedding lookup through logits
+- write down the training and debugging workflow
+- understand how UAS and parser errors should be interpreted
+
+The next assignment should build from this: A3's self-attention and Transformers will be easier if I keep the same habits from A2, especially shape tracking, explicit objectives, and not treating framework calls as magic.
 
 ## Current Status
 
-I have worked through the Word2Vec derivatives, Adam, dropout, transition-system mechanics, parser model, embedding lookup, training loop, and debugging workflow. The remaining A2 work is the final evaluation/postmortem and repository status update.
+Complete as a study-notes milestone. I have worked through the Word2Vec derivatives, Adam, dropout, transition-system mechanics, parser model, embedding lookup, training loop, debugging workflow, UAS interpretation, and final postmortem.
