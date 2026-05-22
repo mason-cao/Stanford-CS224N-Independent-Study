@@ -425,6 +425,104 @@ Why it should be off during evaluation:
 
 In code, this is why `model.train()` and `model.eval()` matter.
 
+## Part 2 Worked Optimization Notes
+
+This section is short in the handout, but it matters because the parser later uses these exact training ideas. Adam controls update behavior; dropout controls overfitting behavior.
+
+### Adam: Momentum
+
+Plain minibatch SGD uses only the current minibatch gradient:
+
+```text
+theta_{t+1} = theta_t - alpha * grad_t
+```
+
+The problem is that a minibatch gradient is noisy. One batch can point partly in a useful direction and partly in a direction caused by that batch's accidental sample composition.
+
+Adam's first moving average is:
+
+```text
+m_{t+1} = beta1 * m_t + (1 - beta1) * grad_t
+```
+
+This is a low-pass filter on gradients. If consecutive minibatches point in a similar direction, the moving average preserves that direction. If a minibatch gives an unusual gradient, the average dampens it. That lower variance helps learning because the optimizer is less likely to zig-zag from batch noise and more likely to make steady progress along directions that persist across many batches.
+
+I should not describe momentum as "avoiding local minima" in a vague way. The clean answer is about smoothing update directions and reducing variance.
+
+### Adam: Adaptive Scaling
+
+Adam's second moving average tracks squared gradients:
+
+```text
+v_{t+1} = beta2 * v_t + (1 - beta2) * (grad_t * grad_t)
+```
+
+The update divides by `sqrt(v)`:
+
+```text
+theta_{t+1} = theta_t - alpha * m_{t+1} / sqrt(v_{t+1})
+```
+
+Ignoring small numerical-stability constants, parameters with smaller historical squared gradients get larger effective updates, and parameters with larger historical squared gradients get smaller effective updates.
+
+That helps when different parameters naturally have different gradient scales. In the parser, frequently observed embeddings or weights connected to common parser features may receive large gradients often, while rare-word features may receive smaller or less frequent gradients. Adaptive scaling keeps one parameter group from dominating only because its gradients are numerically larger.
+
+The important caveat: Adam changes the step size, not the objective. It can make optimization easier, but it does not replace good features, correct labels, or a correct model implementation.
+
+### Dropout Scaling
+
+Dropout is defined as:
+
+```text
+h_drop = gamma * d * h
+```
+
+For one hidden unit:
+
+```text
+d_i = 0 with probability p_drop
+d_i = 1 with probability 1 - p_drop
+```
+
+The assignment chooses `gamma` so:
+
+```text
+E[h_drop_i] = h_i
+```
+
+Compute the expectation:
+
+```text
+E[h_drop_i]
+= E[gamma * d_i * h_i]
+= gamma * h_i * E[d_i]
+= gamma * h_i * (1 - p_drop)
+```
+
+Set this equal to `h_i`:
+
+```text
+gamma * h_i * (1 - p_drop) = h_i
+gamma = 1 / (1 - p_drop)
+```
+
+This is inverted dropout. The units that survive during training are scaled up, so the expected activation magnitude matches the non-dropout network.
+
+### Why Dropout Is Training-Only
+
+Dropout should be active during training because it prevents the hidden layer from relying on a brittle exact set of active units. A feature has to be useful even when some neighboring units are absent. That pressure makes the learned representation less dependent on any single hidden unit.
+
+Dropout should be off during evaluation because evaluation should measure the full learned model deterministically. If dropout stayed on, the same sentence could produce different parser decisions on different passes. Since the train-time scaling already preserved expected activation size, no random masking is needed at evaluation time.
+
+### Part 2 Postmortem
+
+The clean mental split:
+
+- Adam changes how gradients become parameter updates.
+- Dropout changes the training-time computation graph to regularize hidden representations.
+
+Both are general neural network tools. A2 includes them before the parser because the parser is just a small neural classifier trained on parser-state features.
+
 ## Part 3: Transition-Based Parser Mechanics
 
 The parser state has three pieces:
@@ -457,6 +555,84 @@ stack has one item
 ```
 
 For a sentence with `n` words, the parser needs `n` SHIFT operations to move all words out of the buffer, plus `n` arc operations to attach all words into the tree. So the full parse should take `2n` transitions when ROOT is initialized separately on the stack.
+
+## Part 3 Worked Transition Notes
+
+The handout sentence is:
+
+```text
+I presented my findings at the NLP conference
+```
+
+There are eight non-root tokens, so the parse should take:
+
+```text
+2n = 16 transitions
+```
+
+The first three transitions are given in the handout:
+
+```text
+[ROOT] -> SHIFT I
+[ROOT, I] -> SHIFT presented
+[ROOT, I, presented] -> LEFT-ARC presented -> I
+```
+
+Using the current handout's dependency tree, the transition sequence is:
+
+| Step | Stack after step | Buffer after step | New dependency | Transition |
+| --- | --- | --- | --- | --- |
+| 0 | `[ROOT]` | `[I, presented, my, findings, at, the, NLP, conference]` |  | Initial |
+| 1 | `[ROOT, I]` | `[presented, my, findings, at, the, NLP, conference]` |  | SHIFT |
+| 2 | `[ROOT, I, presented]` | `[my, findings, at, the, NLP, conference]` |  | SHIFT |
+| 3 | `[ROOT, presented]` | `[my, findings, at, the, NLP, conference]` | `presented -> I` | LEFT-ARC |
+| 4 | `[ROOT, presented, my]` | `[findings, at, the, NLP, conference]` |  | SHIFT |
+| 5 | `[ROOT, presented, my, findings]` | `[at, the, NLP, conference]` |  | SHIFT |
+| 6 | `[ROOT, presented, findings]` | `[at, the, NLP, conference]` | `findings -> my` | LEFT-ARC |
+| 7 | `[ROOT, presented]` | `[at, the, NLP, conference]` | `presented -> findings` | RIGHT-ARC |
+| 8 | `[ROOT, presented, at]` | `[the, NLP, conference]` |  | SHIFT |
+| 9 | `[ROOT, presented, at, the]` | `[NLP, conference]` |  | SHIFT |
+| 10 | `[ROOT, presented, at, the, NLP]` | `[conference]` |  | SHIFT |
+| 11 | `[ROOT, presented, at, the, NLP, conference]` | `[]` |  | SHIFT |
+| 12 | `[ROOT, presented, at, the, conference]` | `[]` | `conference -> NLP` | LEFT-ARC |
+| 13 | `[ROOT, presented, at, conference]` | `[]` | `conference -> the` | LEFT-ARC |
+| 14 | `[ROOT, presented, conference]` | `[]` | `conference -> at` | LEFT-ARC |
+| 15 | `[ROOT, presented]` | `[]` | `presented -> conference` | RIGHT-ARC |
+| 16 | `[ROOT]` | `[]` | `ROOT -> presented` | RIGHT-ARC |
+
+The stack discipline is the part that matters for implementation:
+
+- `LEFT-ARC` removes the second item from the top of the stack.
+- `RIGHT-ARC` removes the top item from the stack.
+- `SHIFT` is the only operation that consumes the buffer.
+
+The table also makes the `2n` result concrete. Each of the eight tokens is shifted once, and each of the eight tokens eventually gets attached by one arc operation.
+
+### Why ROOT Gets An Arc
+
+The sentence has eight real words, but the final stack includes `ROOT` and the main predicate `presented`. To finish, the parser still needs to attach the sentence head to ROOT:
+
+```text
+ROOT -> presented
+```
+
+That final `RIGHT-ARC` removes `presented`, leaving only `[ROOT]`. The stopping condition is therefore not merely "buffer is empty"; it is:
+
+```text
+buffer is empty and stack has exactly one item
+```
+
+### Implementation Implication
+
+The transition table is also a unit test I can run mentally against `parse_step`:
+
+```text
+SHIFT:     buffer.pop(0) then stack.append(word)
+LEFT-ARC:  dependencies.append((stack[-1], stack[-2])) then remove stack[-2]
+RIGHT-ARC: dependencies.append((stack[-2], stack[-1])) then remove stack[-1]
+```
+
+If I remove the wrong item, the next row of the transition table becomes impossible. That is why I should debug transition mechanics before touching the neural model.
 
 ## Starter Code Map
 
@@ -586,15 +762,13 @@ When something fails, first check shapes:
 - Did I accidentally apply softmax before the loss?
 - Is dropout only active in training mode?
 
-## Questions I Need To Re-Derive By Hand
+## Remaining Questions To Close Out
 
-- Why the one-hot cross-entropy reduces to the negative log probability of the true outside word.
-- How the `yhat - y` error signal follows from softmax plus cross-entropy.
-- How the center-vector gradient changes shape under column-vector versus row-vector conventions.
-- Why the outside-vector update is attractive for the true outside word and repulsive for overpredicted wrong words.
-- Why the parser needs `2n` transitions for a sentence with `n` words.
 - How the parser model dimensions line up from embedding lookup through logits.
+- How to implement embedding lookup efficiently without `nn.Embedding`.
+- How the training loop should switch between `model.train()` and `model.eval()`.
+- How to interpret UAS and parser errors after training.
 
 ## Current Status
 
-I have read the handout and inspected the starter file structure. I have not pulled the code archive into this repo or started implementation.
+I have worked through the Word2Vec derivatives, Adam, dropout, and the transition-system mechanics. The remaining A2 work is to write detailed notes for the parser model, training loop, debugging workflow, and final evaluation/postmortem.
