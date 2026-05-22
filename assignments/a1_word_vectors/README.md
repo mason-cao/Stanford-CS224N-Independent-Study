@@ -9,7 +9,7 @@
 
 ## Repo Status
 
-In progress. Part 1 count-based vector implementation notes are complete; Part 2 GloVe analysis is next.
+In progress. Part 1 count-based vector notes and the core Part 2 GloVe/cosine analysis notes are complete; bias analysis and final A1 wrap-up are next.
 
 I am working through the word-vector material and keeping notes before doing any larger implementation work.
 
@@ -291,6 +291,144 @@ When an analogy fails, plausible reasons include:
 - the input words have multiple meanings
 - the model finds a topical association instead of the intended relation
 - the vocabulary contains odd tokens that happen to be close to the arithmetic target
+
+## Part 2 Finished Notes: GloVe, Similarity, And Analogies
+
+The most important shift from Part 1 to Part 2 is scale. In Part 1, I build vectors from 150 movie reviews. In Part 2, the notebook loads `glove-wiki-gigaword-200`, which has 400,000 vocabulary entries and 200-dimensional vectors. That means the vectors have seen much broader English usage, but they are also farther away from the small corpus I can inspect directly.
+
+I should treat GloVe as a stronger representation, not a magic truth source. It learned from corpus statistics too. The errors are more interesting when I can connect them back to distributional evidence.
+
+### Comparing The Co-Occurrence Plot And The GloVe Plot
+
+The A1 notebook asks me to compare the 2D SVD plot from the movie-review co-occurrence matrix with the 2D projection of pretrained GloVe vectors for:
+
+```text
+movie, book, mysterious, story, fascinating, good, interesting, large, massive, huge
+```
+
+The comparison should not be only visual. I need to explain what changed in the underlying data:
+
+- The co-occurrence matrix is built from a small, domain-specific movie-review sample.
+- GloVe is trained from much larger and more general text.
+- Both plots are projected to two dimensions, so both lose information.
+- The GloVe plot may show cleaner adjective or noun groupings because the original 200-dimensional vectors contain more reliable global statistics.
+- The movie-review plot may put review-language words closer together because the corpus domain is narrow.
+
+If the two plots agree, the safest explanation is that both corpora support the same usage pattern strongly enough to survive projection. If they disagree, I should not immediately say one is wrong. I should ask whether the difference came from corpus size, corpus domain, vector objective, dimensionality, or projection loss.
+
+### Cosine Similarity As A Ranking Tool
+
+Cosine similarity is useful for nearest neighbors because it compares vector direction:
+
+```text
+cosine(p, q) = (p dot q) / (||p|| ||q||)
+```
+
+Gensim's `distance(w1, w2)` reports:
+
+```text
+1 - cosine_similarity(w1, w2)
+```
+
+So smaller distance means the words point in more similar directions. The metric is good for ranking words that are used in similar contexts, but it does not know whether the relationship is synonymy, antonymy, topical association, morphology, or social stereotype.
+
+A useful translation table:
+
+| Observation | Careful interpretation |
+| --- | --- |
+| low cosine distance | similar distributional usage |
+| high cosine similarity | vectors point in similar directions |
+| nearest neighbor is not a synonym | the metric is finding usage similarity, not dictionary meaning |
+| antonym is close | the words fit into many of the same syntactic and topical slots |
+
+This is the reason A1 keeps asking for explanations after each code cell. The numeric output is only the start of the answer.
+
+### Polysemy: Why One Vector Is Not Enough
+
+The polysemy question is really a test of static embeddings. A word with multiple meanings still gets one vector. That single vector has to represent the mixture of contexts in which the word appeared during training.
+
+Good candidate words to inspect:
+
+- `pitch`: throw, field, sales proposal, sound frequency
+- `crane`: bird, construction machine
+- `seal`: animal, official stamp, close tightly
+- `bass`: fish, low-frequency sound or instrument
+- `bank`: financial institution, river edge
+
+The failure mode is predictable. If one sense dominates the corpus, the top neighbors mostly reflect that sense. If two senses are both frequent and have strong context neighborhoods, the top-10 list may contain both. If the second sense mainly appears in compounds or phrases, the single-token vector may not expose it cleanly.
+
+The teaching point is that static vectors collapse contextual meaning before the model sees the sentence. Later contextual models fix this by computing a token representation from the surrounding words. `bank` in "river bank" and `bank` in "central bank" can then have different representations even though the surface token is the same.
+
+### Synonyms And Antonyms: Distributional Similarity Is Not Logic
+
+The synonym/antonym question asks for a case where:
+
+```text
+distance(w1, antonym) < distance(w1, synonym)
+```
+
+The example from the notebook is `happy`, `cheerful`, and `sad`, but I should find a different one when running the notebook. The pattern I should search for is a word whose antonym appears in almost the same grammatical and topical environments.
+
+Candidate search families:
+
+| `w1` | likely synonym | likely antonym | why the antonym may be close |
+| --- | --- | --- | --- |
+| `increase` | `rise` | `decrease` | both appear with prices, rates, amounts, and percentages |
+| `high` | `elevated` | `low` | both modify levels, prices, scores, pressure, risk |
+| `strong` | `powerful` | `weak` | both describe arguments, signals, economies, teams |
+| `success` | `achievement` | `failure` | both appear in evaluation and outcome language |
+
+This is counterintuitive only if I expect embeddings to encode truth-conditional meaning. Under the distributional view, antonyms are often close because they are substitutable in context. The surrounding words do not always tell the model whether the relation is opposition or sameness.
+
+### Analogy Arithmetic
+
+The analogy question uses:
+
+```text
+man : grandfather :: woman : x
+```
+
+The vector expression is:
+
+```text
+target = grandfather - man + woman
+```
+
+Then the model chooses the word vector closest to `target` by cosine similarity. In Gensim syntax, that is:
+
+```python
+wv_from_bin.most_similar(positive=["woman", "grandfather"], negative=["man"])
+```
+
+The result can include `grandmother`, but words like `mother`, `daughter`, or `granddaughter` are also plausible neighbors because the arithmetic lands in a region that mixes gender and family-role structure. The model is not executing a symbolic rule that says "replace male with female while preserving generation exactly." It is doing nearest-neighbor search around a vector offset.
+
+Good analogy examples usually have relations that are frequent, consistent, and nearly linear in the embedding space:
+
+- country to capital
+- adjective to comparative
+- singular to plural
+- male-coded family term to female-coded family term
+- verb tense shifts
+
+Bad analogy examples often fail because the relation is too specific, the vocabulary item is rare, or several relations are entangled. The notebook's `hand : glove :: foot : sock` example is useful because the intended relation is reasonable to a person, but the nearest vector can be pulled toward topical artifacts or corpus-specific phrases instead of the clothing relation.
+
+### How I Should Write The A1 Answers
+
+For every Part 2 answer, I should separate three layers:
+
+1. What the code returned.
+2. What relationship I expected.
+3. Why the embedding geometry might differ from the expectation.
+
+That avoids vague answers like "the model is biased" or "the analogy failed." A better answer names the mechanism:
+
+- one vector averages multiple senses
+- cosine similarity tracks contextual interchangeability
+- analogy arithmetic assumes a linear relation
+- top neighbors are shaped by corpus frequency and vocabulary coverage
+- the two-dimensional plot hides structure from the original vector space
+
+This is the main A1 lesson so far: word vectors are useful because corpus statistics are useful, and word vectors fail in ways that corpus statistics should make me expect.
 
 ### Bias
 
