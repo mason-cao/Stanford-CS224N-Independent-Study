@@ -9,7 +9,7 @@
 
 ## Repo Status
 
-In progress. Part 1 count-based vector notes and the core Part 2 GloVe/cosine analysis notes are complete; bias analysis and final A1 wrap-up are next.
+Complete. I have finished the A1 study notes for count-based vectors, GloVe, similarity failures, analogy behavior, and bias analysis.
 
 I am working through the word-vector material and keeping notes before doing any larger implementation work.
 
@@ -443,17 +443,87 @@ A useful way to think about this:
 
 A mitigation strategy has to define what structure should be preserved and what structure should be reduced. For example, a debiasing method might identify a gender direction using definitional pairs, then reduce that component for words that should be neutral with respect to gender. The hard part is not just the linear algebra; it is deciding which associations are legitimate, which are harmful, and how to avoid hiding bias instead of removing it.
 
-## Working Rules For My A1 Attempt
+## Bias Analysis Finished Notes
+
+The bias questions are where the assignment forces me to stop treating embeddings as neutral geometry. The same mechanism that makes `doctor` and `hospital` close can also make demographic terms line up with occupations, traits, or roles in harmful ways.
+
+The guided query has this structure:
+
+```python
+wv_from_bin.most_similar(positive=["man", "profession"], negative=["woman"])
+wv_from_bin.most_similar(positive=["woman", "profession"], negative=["man"])
+```
+
+The vector arithmetic is asking for words that are close to a profession direction while also moving toward one gendered term and away from the other. If the returned lists differ by prestige, pay, authority, domesticity, sexuality, or social role, that is not a random artifact. It is evidence that the embedding space has encoded associations from the training corpus.
+
+The important wording distinction:
+
+```text
+The embedding reflects corpus associations.
+```
+
+is better than:
+
+```text
+The embedding discovered the true relationship.
+```
+
+Corpus associations can come from unequal historical participation in professions, biased reporting, stereotypes in text, and repeated cultural framing. The vector does not know which regularities are socially descriptive, which are harmful stereotypes, and which are just artifacts of the source data.
+
+### How Bias Gets Into Word Vectors
+
+Bias enters through the distributional objective:
+
+1. The training corpus contains repeated co-occurrence patterns.
+2. The embedding objective rewards vectors that preserve those patterns.
+3. Similar contexts become nearby directions or neighborhoods.
+4. Downstream systems can reuse those neighborhoods without rechecking whether the associations are appropriate.
+
+For example, if text frequently discusses men near executive professions and women near caregiving or domestic roles, a gender direction can become entangled with profession directions. A resume-screening model or search system that uses those vectors can then inherit the association even if no one explicitly coded a gender rule.
+
+This is why bias is not an optional ethics appendix. It is a direct consequence of the representation-learning setup.
+
+### Mitigation Notes
+
+A simple mitigation idea is to identify a bias direction and reduce it for words that should be neutral with respect to that dimension. For gender, definitional pairs such as:
+
+```text
+woman - man
+she - he
+mother - father
+```
+
+can estimate a gender subspace. Then neutral words such as occupations can be projected to remove or reduce that component.
+
+But this is not a complete solution. Problems I need to remember:
+
+- Some gender information is legitimate for definitional words like `mother` or `father`.
+- Some apparently neutral words may have complicated social histories.
+- Removing a linear direction can hide bias from one probe while leaving nonlinear or neighborhood-level bias intact.
+- A debiased embedding can still be used by a biased downstream dataset or model.
+
+The practical lesson is that mitigation needs measurement before and after intervention. It is not enough to say "remove the gender direction" and assume the representation is fixed.
+
+### My Final A1 Takeaway
+
+A1 is really about learning to distrust easy interpretations of embedding geometry. The workflow moves from transparent counts to pretrained vectors, and each step makes the representation more powerful but less directly inspectable.
+
+What I can now explain:
+
+- how a sorted vocabulary and windowed counts become a co-occurrence matrix
+- why SVD gives a low-dimensional diagnostic view rather than ground truth
+- why GloVe vectors can be better than a tiny count matrix while still reflecting corpus artifacts
+- why cosine similarity usually means "used similarly" instead of "means the same thing"
+- why one static vector struggles with polysemy
+- why analogy arithmetic works only when a relation is represented by a stable offset
+- why bias analysis belongs inside the technical study of word vectors
+
+The thread connecting all of this is the distributional hypothesis. Word vectors are useful because context predicts a lot about meaning. They fail because context also contains ambiguity, domain skew, historical inequality, and stereotypes.
+
+## Working Rules I Used For A1
 
 - Pass every provided sanity check before writing analysis answers.
 - Keep implementation functions general; do not hard-code the toy tests.
 - Treat 2D plots as diagnostics, not ground truth.
 - For every nearest-neighbor or analogy answer, explain the corpus/context reason, not just the observed output.
 - Save the exact examples I try, including failures, because the failed searches are usually more informative than the one that works.
-
-## What Should Eventually Live Here
-
-- starter materials after I pull them locally
-- derivation notes specific to the assignment
-- code experiments and debugging notes
-- a short postmortem on what actually took time
