@@ -339,3 +339,387 @@ For implementation, the likely mistakes are:
 - accidentally allowing a decoder token to attend to future tokens
 
 The next checkpoint should handle why position information has to be added before attention. Without position embeddings, the same set of token vectors shuffled into a different order just produces the same output vectors shuffled in the same way.
+
+## Part 2: Why Position Embeddings Are Necessary
+
+The handout simplifies a Transformer block down to two main pieces:
+
+```text
+self-attention layer
+feed-forward layer applied independently at each position
+```
+
+For input:
+
+```text
+X in R^{T x d}
+```
+
+where `T` is sequence length and `d` is hidden dimension, the attention projections are:
+
+```text
+Q = X W_Q
+K = X W_K
+V = X W_V
+```
+
+with:
+
+```text
+W_Q, W_K, W_V in R^{d x d}
+Q, K, V in R^{T x d}
+```
+
+The self-attention output is:
+
+```text
+H = softmax(Q K^T / sqrt(d)) V
+```
+
+Then the feed-forward layer is:
+
+```text
+Z = ReLU(H W_1 + 1 b_1) W_2 + 1 b_2
+```
+
+where:
+
+```text
+W_1, W_2 in R^{d x d}
+b_1, b_2 in R^{1 x d}
+1 in R^{T x 1}
+Z in R^{T x d}
+```
+
+The key question is: does this block know where a token appeared in the sentence?
+
+Without position information, the answer is no. The block can compare tokens to other tokens, but it has no separate signal that says "this token was first" or "this token came after that token."
+
+## Permutation Matrix Setup
+
+A permutation matrix `P in R^{T x T}` reorders the rows of a sequence matrix. If:
+
+```text
+X_perm = P X
+```
+
+then `X_perm` contains the same token vectors as `X`, but in a shuffled order.
+
+The handout asks me to show:
+
+```text
+Z_perm = P Z
+```
+
+This is called permutation equivariance. It does not mean the output is unchanged. It means the output changes in exactly the same way as the input was permuted. Shuffle the input rows, and the output rows are shuffled by the same permutation.
+
+That is a problem for language because token order is not just a display choice. Word order changes grammatical roles and meaning.
+
+## Self-Attention Under A Permutation
+
+Start with the permuted input:
+
+```text
+X_perm = P X
+```
+
+The projected queries, keys, and values become:
+
+```text
+Q_perm = X_perm W_Q = P X W_Q = P Q
+K_perm = X_perm W_K = P X W_K = P K
+V_perm = X_perm W_V = P X W_V = P V
+```
+
+The score matrix for the permuted input is:
+
+```text
+Q_perm K_perm^T / sqrt(d)
+```
+
+Substitute the permuted projections:
+
+```text
+(P Q) (P K)^T / sqrt(d)
+```
+
+Use:
+
+```text
+(P K)^T = K^T P^T
+```
+
+so:
+
+```text
+(P Q) (P K)^T / sqrt(d)
+= P Q K^T P^T / sqrt(d)
+```
+
+If:
+
+```text
+A = Q K^T / sqrt(d)
+```
+
+then:
+
+```text
+A_perm = P A P^T
+```
+
+The handout gives:
+
+```text
+softmax(P A P^T) = P softmax(A) P^T
+```
+
+So the attention-weight matrix becomes:
+
+```text
+S_perm = P S P^T
+```
+
+where:
+
+```text
+S = softmax(A)
+```
+
+Now compute the permuted attention output:
+
+```text
+H_perm = S_perm V_perm
+```
+
+Substitute:
+
+```text
+H_perm = (P S P^T) (P V)
+```
+
+Since:
+
+```text
+P^T P = I
+```
+
+the middle terms cancel:
+
+```text
+H_perm = P S V = P H
+```
+
+So the self-attention layer is permutation equivariant:
+
+```text
+X_perm = P X  implies  H_perm = P H
+```
+
+The attention layer did not detect that the input order was "wrong." It just carried the shuffle through.
+
+## Feed-Forward Layer Under A Permutation
+
+The feed-forward layer is applied to every position with the same weights. That weight sharing is useful, but it also means the feed-forward layer does not introduce position information by itself.
+
+From the attention result:
+
+```text
+H_perm = P H
+```
+
+The first affine part of the feed-forward layer is:
+
+```text
+H_perm W_1 + 1 b_1
+```
+
+Substitute:
+
+```text
+P H W_1 + 1 b_1
+```
+
+A permutation matrix does not change the all-ones column:
+
+```text
+P 1 = 1
+```
+
+So:
+
+```text
+1 b_1 = P 1 b_1
+```
+
+Therefore:
+
+```text
+P H W_1 + 1 b_1
+= P H W_1 + P 1 b_1
+= P (H W_1 + 1 b_1)
+```
+
+The handout also gives:
+
+```text
+ReLU(P A) = P ReLU(A)
+```
+
+because permuting rows before a pointwise nonlinearity is the same as applying the pointwise nonlinearity and then permuting rows.
+
+Now:
+
+```text
+Z_perm = ReLU(H_perm W_1 + 1 b_1) W_2 + 1 b_2
+```
+
+Substitute the previous expression:
+
+```text
+Z_perm = ReLU(P (H W_1 + 1 b_1)) W_2 + 1 b_2
+```
+
+Move the permutation through ReLU:
+
+```text
+Z_perm = P ReLU(H W_1 + 1 b_1) W_2 + 1 b_2
+```
+
+Use `1 b_2 = P 1 b_2`:
+
+```text
+Z_perm = P ReLU(H W_1 + 1 b_1) W_2 + P 1 b_2
+```
+
+Factor out `P`:
+
+```text
+Z_perm = P (ReLU(H W_1 + 1 b_1) W_2 + 1 b_2)
+```
+
+The expression inside the parentheses is exactly `Z`, so:
+
+```text
+Z_perm = P Z
+```
+
+This completes the proof for the simplified Transformer block.
+
+## What The Proof Means In Plain Terms
+
+The proof says the block treats the input as a set of token vectors with interactions, not as an ordered sentence. It can produce contextual token representations, but the context is orderless unless some extra signal encodes order.
+
+For example:
+
+```text
+the dog chased the cat
+the cat chased the dog
+```
+
+These sentences contain the same words but do not mean the same thing. A model without position information has no direct way to distinguish "dog before chased" from "dog after chased." It can compare token identities, but it cannot know which occurrence came first.
+
+This matters even more for autoregressive language modeling. Predicting the next token is inherently positional. The model needs to know which tokens are earlier context and which token position is currently being predicted.
+
+## Adding Position Embeddings
+
+Position embeddings add a position-specific vector to each token embedding:
+
+```text
+X_pos = X + Phi
+```
+
+where:
+
+```text
+Phi in R^{T x d}
+```
+
+The row `Phi_t` represents position `t`. After this addition, the representation at a row contains both:
+
+- token identity information from the word embedding
+- position information from the position embedding
+
+Now the same word at two different positions does not have exactly the same input vector. If the word embedding for `dog` is `x_dog`, then:
+
+```text
+position 2: x_dog + Phi_2
+position 5: x_dog + Phi_5
+```
+
+Those are different vectors if:
+
+```text
+Phi_2 != Phi_5
+```
+
+This breaks the symmetry that made the earlier block permutation equivariant over bare token embeddings. The model can now learn different behavior based on relative and absolute position signals.
+
+## Sinusoidal Position Embeddings
+
+The handout gives fixed sinusoidal position embeddings:
+
+```text
+Phi(t, 2i) = sin(t / 10000^{2i/d})
+Phi(t, 2i + 1) = cos(t / 10000^{2i/d})
+```
+
+where:
+
+```text
+t in {0, 1, ..., T - 1}
+i in {0, 1, ..., d/2 - 1}
+```
+
+This means each pair of dimensions uses a sine and cosine wave with a different wavelength. Low-index dimensions change faster; higher-index dimensions change more slowly because the denominator is larger.
+
+The position vector for a token is therefore not a single scalar position index. It is a pattern across many frequencies. That makes position a continuous geometric signal that can be added to embeddings and consumed by the same dot-product machinery as everything else.
+
+The sine/cosine pairing is useful because relative shifts have structured effects. For a single frequency, knowing both:
+
+```text
+sin(t / scale)
+cos(t / scale)
+```
+
+makes it possible to express shifted positions using angle-addition identities. That is one reason sinusoidal encodings are a natural fixed-position scheme.
+
+## Can Two Position Embeddings Be The Same?
+
+For the exact handout question, position embeddings for two different tokens can be the same if those tokens occur at the same position in separate sequences. Position embeddings encode position, not token identity.
+
+Example:
+
+```text
+sentence A position 0: "the" gets Phi_0
+sentence B position 0: "cat" gets Phi_0
+```
+
+The tokens are different, but the position embedding is the same because both are at position `0`.
+
+Within one sequence, two different positions are not expected to share the same full sinusoidal vector over the normal sequence lengths used by the model. Individual dimensions can repeat because sine and cosine are periodic, but matching the entire vector across all frequencies at a different position would require all frequency pairs to line up at once.
+
+The clean answer I should remember:
+
+- same position in different sequences: yes, same position embedding
+- different positions in the same ordinary-length sequence: no, not expected for the full vector
+- individual sinusoidal dimensions: yes, they repeat periodically
+
+## Part 2 Postmortem
+
+The position-embedding section is really a symmetry argument. Without positions, self-attention and per-position feed-forward layers are permutation equivariant:
+
+```text
+X_perm = P X  implies  Z_perm = P Z
+```
+
+That is mathematically neat but linguistically wrong. Text is ordered, and many meanings depend on that order. Position embeddings give the model a way to distinguish equal token embeddings at different rows of the sequence matrix.
+
+For implementation, the practical checks are:
+
+- token embeddings and position embeddings must have the same hidden dimension before addition
+- position IDs should run from `0` to `T - 1` for the current sequence length
+- position embeddings must be sliced or indexed to match the actual input length
+- the causal mask and position embeddings solve different problems: position embeddings identify order, while the causal mask prevents future-token leakage
+
+The next checkpoint should move from the written math into the starter-code structure: `MLP`, `CausalAttention`, `DecoderBlock`, `Transformer.forward`, `Transformer.generate`, and `Transformer.get_loss_on_batch`.
