@@ -723,3 +723,502 @@ For implementation, the practical checks are:
 - the causal mask and position embeddings solve different problems: position embeddings identify order, while the causal mask prevents future-token leakage
 
 The next checkpoint should move from the written math into the starter-code structure: `MLP`, `CausalAttention`, `DecoderBlock`, `Transformer.forward`, `Transformer.generate`, and `Transformer.get_loss_on_batch`.
+
+## Part 3: Decoder-Only Transformer Implementation Map
+
+The official A3 starter code is a compact GPT-2-style Transformer. The file I need to implement later is:
+
+```text
+model_solution.py
+```
+
+The main TODOs are:
+
+```text
+CausalAttention.forward
+MLP.forward
+DecoderBlock.forward
+Transformer.forward
+Transformer.generate
+Transformer.get_loss_on_batch
+```
+
+The tests are snapshot tests. They load a small model with fixed weights, run each module on saved inputs, and compare the output to saved numpy arrays. That means small shape mistakes, mask mistakes, or layer-order mistakes should fail deterministically.
+
+The test config is:
+
+```text
+d_model = 48
+n_heads = 2
+n_layers = 2
+context_length = 16
+vocab_size = 16
+```
+
+So each attention head has:
+
+```text
+d_attention = d_model / n_heads = 24
+```
+
+This small config is useful for debugging because every tensor shape is easy to compute by hand.
+
+## ModelConfig
+
+The assignment uses a dataclass:
+
+```text
+ModelConfig(
+    d_model,
+    n_heads,
+    n_layers,
+    context_length,
+    vocab_size,
+)
+```
+
+The shape meanings:
+
+- `d_model`: hidden width of token representations
+- `n_heads`: number of attention heads
+- `n_layers`: number of decoder blocks
+- `context_length`: maximum sequence length and causal-mask size
+- `vocab_size`: number of possible token IDs and output logits
+
+The attention module asserts:
+
+```text
+d_model % n_heads == 0
+```
+
+because the model dimension is split evenly across heads.
+
+## MLP
+
+The MLP is the feed-forward sublayer inside each decoder block:
+
+```text
+fc1: d_model -> 4 * d_model
+GELU
+fc2: 4 * d_model -> d_model
+```
+
+For input:
+
+```text
+x in R^{B x T x d_model}
+```
+
+the output should have the same shape:
+
+```text
+MLP(x) in R^{B x T x d_model}
+```
+
+The expansion to `4 * d_model` gives the block more per-position capacity, and the projection back to `d_model` makes the residual connection possible. The MLP does not mix positions. It applies the same two linear layers to each token position independently.
+
+That means the MLP is not where sequence information is exchanged. Sequence mixing happens in attention; per-token transformation happens in the MLP.
+
+## GELU
+
+The starter defines the GPT-style approximate GELU:
+
+```text
+0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 x^3)))
+```
+
+I should not replace it with a different activation if I want the snapshot tests to match. Even if `torch.nn.GELU` is mathematically close, the test is comparing saved numeric outputs. Use the exact provided module.
+
+## CausalAttention: Expected Tensor Story
+
+Input:
+
+```text
+x in R^{B x T x d_model}
+```
+
+Linear projections:
+
+```text
+k = W_k(x)
+q = W_q(x)
+v = W_v(x)
+```
+
+Before splitting heads:
+
+```text
+k, q, v in R^{B x T x d_model}
+```
+
+After splitting into heads:
+
+```text
+k, q, v in R^{B x n_heads x T x d_attention}
+```
+
+The score matrix compares each query position with each key position:
+
+```text
+scores = q @ k^T / sqrt(d_attention)
+```
+
+Shape:
+
+```text
+scores in R^{B x n_heads x T x T}
+```
+
+The last two dimensions mean:
+
+```text
+row = query position
+column = key/value position
+```
+
+For a decoder-only language model, row `t` must only see columns `0` through `t`. The starter registers a lower-triangular causal mask:
+
+```text
+causal_mask shape: 1 x 1 x context_length x context_length
+```
+
+For a shorter sequence of length `T`, the mask needs to be sliced to:
+
+```text
+1 x 1 x T x T
+```
+
+The masked scores should make future positions impossible before softmax. Conceptually:
+
+```text
+future score entries -> -inf
+```
+
+Then:
+
+```text
+attention_weights = softmax(masked_scores, dim=-1)
+```
+
+The softmax dimension must be the key-position dimension. Each query row gets a probability distribution over allowed previous positions.
+
+The attention output per head is:
+
+```text
+attention_weights @ v
+```
+
+Shape:
+
+```text
+B x n_heads x T x d_attention
+```
+
+Then the heads are concatenated back to:
+
+```text
+B x T x d_model
+```
+
+and passed through:
+
+```text
+W_o: d_model -> d_model
+```
+
+The final output shape is:
+
+```text
+B x T x d_model
+```
+
+## CausalAttention Pitfalls
+
+The most likely implementation mistakes:
+
+- applying `softmax` over `d_attention` instead of over key positions
+- using `sqrt(d_model)` instead of `sqrt(d_attention)` for the scale
+- transposing the wrong dimensions before `q @ k^T`
+- forgetting to slice the causal mask to the current `T`
+- using the upper triangle instead of the lower triangle
+- masking after softmax instead of before softmax
+- failing to concatenate heads back in the original hidden dimension order
+
+The fastest shape check is:
+
+```text
+input:  B x T x d_model
+output: B x T x d_model
+```
+
+Every decoder sublayer must preserve that outer shape so residual connections are valid.
+
+## DecoderBlock
+
+The decoder block contains:
+
+```text
+pre_layer_norm
+attention
+post_layer_norm
+mlp
+```
+
+The important architectural choice is pre-norm residual structure:
+
+```text
+x = x + attention(pre_layer_norm(x))
+x = x + mlp(post_layer_norm(x))
+```
+
+This means layer normalization happens before each sublayer, not after adding the residual. The residual path carries the previous representation forward, and the sublayer contributes an update.
+
+Shape stays constant:
+
+```text
+B x T x d_model -> B x T x d_model
+```
+
+The tests will catch if I swap the order of layer norm, residual addition, attention, or MLP. These operations all have compatible shapes, so a wrong order may run without crashing but still produce the wrong snapshot output.
+
+## Transformer.forward
+
+The model input is token IDs:
+
+```text
+x in R^{B x T}
+```
+
+The forward pass should create token embeddings:
+
+```text
+token_emb = embeddings(x)
+token_emb in R^{B x T x d_model}
+```
+
+It also needs position IDs:
+
+```text
+positions = [0, 1, ..., T - 1]
+```
+
+Position embeddings:
+
+```text
+pos_emb in R^{T x d_model}
+```
+
+After broadcasting across the batch:
+
+```text
+h = token_emb + pos_emb
+```
+
+Then run each decoder block:
+
+```text
+for block in backbone:
+    h = block(h)
+```
+
+Then:
+
+```text
+h = final_layer_norm(h)
+logits = lm_head(h)
+```
+
+The output shape is:
+
+```text
+logits in R^{B x T x vocab_size}
+```
+
+Each row `logits[b, t, :]` is the model's distribution over the next token after seeing positions up through `t`, subject to the causal mask.
+
+## Language-Model Loss
+
+For autoregressive training, the input sequence supplies both context and targets. If:
+
+```text
+input_ids = [x_0, x_1, x_2, ..., x_{T-1}]
+```
+
+then the model should predict:
+
+```text
+x_1 from position 0
+x_2 from position 1
+...
+x_{T-1} from position T-2
+```
+
+So the logits and labels are shifted:
+
+```text
+prediction logits: logits[:, :-1, :]
+target labels:     input_ids[:, 1:]
+```
+
+The last input position has no next-token target inside the same chunk, so it is not used in the loss.
+
+Cross-entropy expects class scores with vocabulary as the class dimension. A common clean shape conversion is:
+
+```text
+logits_for_loss in R^{B * (T - 1) x vocab_size}
+labels_for_loss in R^{B * (T - 1)}
+```
+
+The loss is a scalar average over all predicted positions in the batch.
+
+This is the same softmax-cross-entropy pattern from A2, now repeated across every next-token prediction in a sequence.
+
+## Generation
+
+Generation should be iterative:
+
+```text
+start with x
+repeat num_new_tokens times:
+    crop context if it is longer than context_length
+    run forward pass
+    take logits from the final position
+    choose the next token
+    append it to x
+```
+
+The starter tests expect deterministic output. That usually means greedy decoding:
+
+```text
+next_token = argmax(last_position_logits)
+```
+
+Sampling would be useful for creative generation, but it would not match a fixed snapshot test unless the assignment explicitly seeded and expected sampling behavior.
+
+The context-cropping point matters because the learned position embeddings and causal mask are only defined up to `context_length`. Once a generated sequence gets longer than that, the model should feed only the most recent `context_length` tokens into the forward pass.
+
+## Tests
+
+The official test command is run from the starter archive's `tests/` directory:
+
+```bash
+cd tests
+pytest
+```
+
+Useful targeted tests:
+
+```bash
+pytest test_student.py::test_mlp
+pytest test_student.py::test_attention
+pytest test_student.py::test_decoder_block
+pytest test_student.py::test_forward
+pytest test_student.py::test_generate
+pytest test_student.py::test_loss_on_batch
+```
+
+The dependency order I should use when implementing:
+
+1. `test_mlp`
+2. `test_attention`
+3. `test_decoder_block`
+4. `test_forward`
+5. `test_loss_on_batch`
+6. `test_generate`
+
+That order follows the module graph. `DecoderBlock` depends on `MLP` and `CausalAttention`; `Transformer.forward` depends on the blocks; loss and generation depend on forward.
+
+## Training Loop
+
+The training script uses TinyStories and GPT-2 tokenization. It:
+
+- loads a small slice of TinyStories
+- tokenizes documents with a GPT-2 tokenizer
+- packs tokens into fixed-length chunks
+- caches those chunks under `datasets/`
+- trains a fresh `Transformer`
+- tracks loss and gradient norm
+- uses AdamW
+- optionally clips gradients
+- saves `losses_and_grad_norms.png`
+
+The default tiny model config in `train.py` is:
+
+```text
+d_model = 33
+n_heads = 3
+n_layers = 3
+context_length = 512
+vocab_size = 50257
+```
+
+The head dimension is:
+
+```text
+d_attention = 33 / 3 = 11
+```
+
+This is intentionally small enough to train quickly, but still structurally the same model. The larger GPT-2 loading path uses:
+
+```text
+d_model = 768
+n_heads = 12
+n_layers = 12
+context_length = 1024
+vocab_size = 50257
+```
+
+The training loop is not the first thing to debug. The correct sequence is:
+
+```text
+unit tests -> forward/loss tests -> short training run
+```
+
+If loss does not move in training after tests pass, then I should inspect learning rate, gradient norm, data loading, and whether the model is in train mode. If tests fail, training behavior is not meaningful yet.
+
+## Hugging Face Weight Conversion
+
+The utility file maps Hugging Face GPT-2 parameter names into the assignment's simpler module names. Important ideas:
+
+- GPT-2 combines Q, K, and V into one `c_attn` projection
+- the assignment separates them into `W_q`, `W_k`, and `W_v`
+- some Hugging Face weights need transposition because GPT-2's `Conv1D` wrapper stores weights differently from `nn.Linear`
+- `wte` maps to token embeddings
+- `wpe` maps to position embeddings
+- `ln_f` maps to final layer norm
+- `lm_head` maps to output projection
+
+I do not need this converter for the snapshot tests, but it explains why the local model is trying to match GPT-2's module order and naming logic.
+
+## Part 3 Postmortem
+
+A3's implementation is a stack of shape-preserving blocks:
+
+```text
+token IDs
+-> token + position embeddings
+-> repeated decoder blocks
+-> final layer norm
+-> vocabulary logits
+```
+
+The core invariant is:
+
+```text
+B x T x d_model
+```
+
+Once token IDs become embeddings, every internal block keeps that shape until the final vocabulary projection. Attention is the only sublayer that mixes positions. The MLP transforms each position independently. Position embeddings provide order information. The causal mask enforces the autoregressive constraint.
+
+The implementation checklist I want in front of me when coding:
+
+- preserve `B x T x d_model` through every block
+- split heads into `B x n_heads x T x d_attention`
+- scale scores by `sqrt(d_attention)`
+- softmax over key positions
+- mask future positions before softmax
+- use pre-norm residual order inside `DecoderBlock`
+- shift logits and labels by one for language-model loss
+- use deterministic argmax generation for the snapshot test
+
+This completes the first A3 study pass. The next real step would be pulling the starter code into a working local `code/` directory and implementing the TODOs against the snapshot tests.

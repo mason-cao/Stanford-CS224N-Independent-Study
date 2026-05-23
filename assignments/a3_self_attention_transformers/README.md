@@ -8,13 +8,15 @@
 
 ## Repo Status
 
-Started.
+First study pass complete.
 
-I have started the A3 materials by reading the official handout and Week 3 Transformer materials, then writing a first pass through the attention-exploration and position-embedding sections.
+I have completed a first study pass through the A3 written material and starter-code structure: attention exploration, position embeddings, and the decoder-only Transformer implementation map.
 
 The first checkpoint is focused on attention as a soft lookup operation: how queries score keys, how softmax converts scores into weights, why copying a value is easy when one score dominates, why averaging values with one head is fragile, and why multiple heads give a cleaner way to compose information.
 
 The second checkpoint is focused on why position information is mathematically necessary. Without position embeddings, the simplified Transformer block in the handout is permutation equivariant: if the input tokens are shuffled, the output is shuffled in exactly the same way. Position embeddings break that symmetry by making identical token embeddings different at different sequence positions.
+
+The third checkpoint is focused on the implementation path through the official starter code: `MLP`, `CausalAttention`, `DecoderBlock`, `Transformer.forward`, `Transformer.generate`, `Transformer.get_loss_on_batch`, snapshot tests, and the TinyStories training loop.
 
 The assignment-specific notes are in [notes.md](notes.md).
 
@@ -22,7 +24,7 @@ The assignment-specific notes are in [notes.md](notes.md).
 
 1. Attention exploration: soft lookup mechanics, copying, averaging, single-head variance, and multi-head intuition. Complete.
 2. Position embeddings: permutation equivariance, why token order is invisible without position signals, and sinusoidal-position edge cases. Complete.
-3. Transformer implementation: tensor-shape checklist for `model_solution.py`, training-loop notes, loss computation, generation, and local test commands.
+3. Transformer implementation: tensor-shape checklist for `model_solution.py`, training-loop notes, loss computation, generation, and local test commands. Complete.
 
 ## Intended Local Structure
 
