@@ -28,7 +28,7 @@ This is my tracker for the current public CS224N assignment sequence. I am follo
 | [x] A1: Introduction to Word Vectors | Complete |
 | [x] A2: Word2Vec and Dependency Parsing | Complete |
 | [x] A3: Self-Attention and Transformers | Complete |
-| [ ] A4: Large Language Model Benchmarking and Evaluation | Not started |
+| [ ] A4: Large Language Model Benchmarking and Evaluation | Started |
 
 I will keep updating this as I finish each assignment, revisit the lecture material, and write up the parts that are mathematically interesting or practically non-obvious.
 
@@ -38,7 +38,7 @@ Since CS224N assignments change across offerings, this tracker follows the curre
 
 I have now worked through the path from word vectors and feedforward neural networks into a decoder-only Transformer. The most important through-line so far is that modern language models are built from the same basic ingredients repeated carefully: vector representations, dot-product scoring, softmax cross-entropy, gradient-based optimization, and strict tensor-shape discipline.
 
-The A3 work made the Transformer architecture feel much less mysterious. Attention is a soft lookup over values, multi-head attention decomposes several lookups into parallel subspaces, position embeddings break the permutation symmetry of bare self-attention, and the causal mask turns the block into a valid left-to-right language model. The next shift is from building the model to evaluating model behavior: benchmarks, grading, failure modes, and the limits of automatic evaluation.
+The A3 work made the Transformer architecture feel much less mysterious. Attention is a soft lookup over values, multi-head attention decomposes several lookups into parallel subspaces, position embeddings break the permutation symmetry of bare self-attention, and the causal mask turns the block into a valid left-to-right language model. I am now starting A4, where the focus shifts from building the model to evaluating behavior: benchmarks, grading pipelines, failure modes, judge bias, and the limits of automatic evaluation.
 
 ## Credits
 

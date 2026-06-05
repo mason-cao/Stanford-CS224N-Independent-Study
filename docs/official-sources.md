@@ -20,6 +20,7 @@ These are the official materials I am using while working through the course.
 - A2 code release: <https://web.stanford.edu/class/cs224n/assignments_w26/a2.zip>
 - A3 handout: <https://web.stanford.edu/class/cs224n/assignments_w26/a3.pdf>
 - A4 handout: <https://web.stanford.edu/class/cs224n/assignments_w26/a4.pdf>
+- A4 code release: <https://web.stanford.edu/class/cs224n/assignments_w26/a4.zip>
 
 ## Notes
 
@@ -31,3 +32,4 @@ These are the official materials I am using while working through the course.
 
 - Week 2 neural networks slides: <https://web.stanford.edu/class/cs224n/slides_w26/cs224n-2026-lecture03-neuralnets.pdf>
 - Week 2 neural networks notes: <https://web.stanford.edu/class/cs224n/readings/cs224n-2019-notes03-neuralnets.pdf>
+- Week 6 benchmarking and evaluation slides: <https://web.stanford.edu/class/cs224n/slides_w26/cs224n-2026-lecture11-evaluation.pdf>
