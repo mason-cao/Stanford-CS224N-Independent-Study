@@ -27,7 +27,7 @@ This is my tracker for the current public CS224N assignment sequence. I am follo
 | --- | --- |
 | [x] A1: Introduction to Word Vectors | Complete |
 | [x] A2: Word2Vec and Dependency Parsing | Complete |
-| [ ] A3: Self-Attention and Transformers | Not started |
+| [x] A3: Self-Attention and Transformers | Complete |
 | [ ] A4: Large Language Model Benchmarking and Evaluation | Not started |
 
 I will keep updating this as I finish each assignment, revisit the lecture material, and write up the parts that are mathematically interesting or practically non-obvious.
@@ -36,9 +36,9 @@ Since CS224N assignments change across offerings, this tracker follows the curre
 
 ## Technical Focus
 
-Right now I am starting with word vectors, because that feels like the right place to build real intuition before jumping into bigger models. I want to understand what it actually means for words to live in a vector space: what the training objective is doing, why similar contexts lead to similar representations, and where the geometry is useful versus where it is just a nice visualization.
+I have now worked through the path from word vectors and feedforward neural networks into a decoder-only Transformer. The most important through-line so far is that modern language models are built from the same basic ingredients repeated carefully: vector representations, dot-product scoring, softmax cross-entropy, gradient-based optimization, and strict tensor-shape discipline.
 
-Later in the course, I am especially interested in the path from RNNs to Transformers. But I do not want to rush there. For now, the goal is to get the basics of representation learning solid enough that the later models feel like extensions of ideas I already understand, not a pile of architecture diagrams.
+The A3 work made the Transformer architecture feel much less mysterious. Attention is a soft lookup over values, multi-head attention decomposes several lookups into parallel subspaces, position embeddings break the permutation symmetry of bare self-attention, and the causal mask turns the block into a valid left-to-right language model. The next shift is from building the model to evaluating model behavior: benchmarks, grading, failure modes, and the limits of automatic evaluation.
 
 ## Credits
 

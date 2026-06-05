@@ -8,9 +8,9 @@
 
 ## Repo Status
 
-First study pass complete. Implementation and training/writeup companions added.
+Complete as a study-notes milestone.
 
-I have completed a first study pass through the A3 written material and starter-code structure: attention exploration, position embeddings, and the decoder-only Transformer implementation map.
+I have completed the A3 study pass through the written material and starter-code structure: attention exploration, position embeddings, the decoder-only Transformer implementation map, implementation sanity checks, and training/writeup interpretation.
 
 The first checkpoint is focused on attention as a soft lookup operation: how queries score keys, how softmax converts scores into weights, why copying a value is easy when one score dominates, why averaging values with one head is fragile, and why multiple heads give a cleaner way to compose information.
 
@@ -23,6 +23,19 @@ The assignment-specific notes are in [notes.md](notes.md).
 The implementation/debug companion is in [attention-sanity-checks.md](attention-sanity-checks.md).
 
 The training and writeup companion is in [training-and-writeup.md](training-and-writeup.md).
+
+## Wrap-Up
+
+A3 is the point where the course material turns into the architecture behind modern language models. My main takeaways are:
+
+- Attention is a differentiable lookup: query-key scores become a softmax distribution over values.
+- One attention head can copy or average values, but multiple heads give a cleaner way to compose several focused lookups.
+- A self-attention block without position information is permutation equivariant, so position embeddings are necessary for ordered text.
+- Decoder-only language modeling needs both position embeddings and a causal mask: positions identify order, while the mask prevents future-token leakage.
+- The implementation is mostly a shape-preserving residual stack from `B x T x d_model` to `B x T x d_model`, followed by a projection to vocabulary logits.
+- The training curve only becomes meaningful after the attention mask, residual order, loss shift, and generation path are mechanically correct.
+
+I have not mirrored the official starter archive into this repository. The repo version of A3 is complete as a study record: derivations, shape checks, debugging checklists, training interpretation notes, and the local implementation plan I would use with the official starter files.
 
 ## Checkpoint Plan
 
