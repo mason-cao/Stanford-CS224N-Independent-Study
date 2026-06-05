@@ -8,7 +8,7 @@
 
 ## Repo Status
 
-First study pass complete.
+First study pass complete. Implementation sanity-check companion added.
 
 I have completed a first study pass through the A3 written material and starter-code structure: attention exploration, position embeddings, and the decoder-only Transformer implementation map.
 
@@ -20,14 +20,17 @@ The third checkpoint is focused on the implementation path through the official 
 
 The assignment-specific notes are in [notes.md](notes.md).
 
+The implementation/debug companion is in [attention-sanity-checks.md](attention-sanity-checks.md).
+
 ## Checkpoint Plan
 
 1. Attention exploration: soft lookup mechanics, copying, averaging, single-head variance, and multi-head intuition. Complete.
 2. Position embeddings: permutation equivariance, why token order is invisible without position signals, and sinusoidal-position edge cases. Complete.
 3. Transformer implementation: tensor-shape checklist for `model_solution.py`, training-loop notes, loss computation, generation, and local test commands. Complete.
+4. Implementation sanity checks: focused debugging checklist for attention axes, causal masking, residual order, language-model loss, generation, and training sanity checks. Complete.
 
 ## Intended Local Structure
 
 - `code/` for starter files once pulled locally
 - `notes.md` for derivations and tensor-shape checks
-- `attention-sanity-checks.md` for implementation pitfalls
+- `attention-sanity-checks.md` for implementation pitfalls and debugging checks
